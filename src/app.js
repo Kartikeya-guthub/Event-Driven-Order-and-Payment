@@ -3,17 +3,16 @@ const express = require('express');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+const ordersRouter = require('./routes/orders');
+
+// Middleware to parse JSON bodies
+app.use(express.json());
+
 // Middleware
 
 
 
-// Basic health check route
-app.get('/', (req, res) => {
-    res.json({
-        message: 'Event-Driven Order and Payment API',
-        status: 'running'
-    });
-});
+app.use('/orders', ordersRouter);
 
 // Start server
 app.listen(PORT, () => {

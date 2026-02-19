@@ -1,19 +1,27 @@
 require('dotenv').config();
 const fs = require('fs');
 const path = require('path');
-const pool = require('../src/db/connection');
+const db = require('../src/db/connection');
 
 async function runMigrations() {
-  const file = path.join(__dirname, '../migrations/001_init.sql');
-  const sql = fs.readFileSync(file, 'utf8');
-
+  const client = await db.client();
   try {
-    await pool.query(sql);
+    const filePath = path.join(__dirname, '../migrations/001_init.sql');
+    const sql = fs.readFileSync(filePath, 'utf8');
+
+    console.log('Running migration 001_init.sql...');
+
+    await client.query('BEGIN');
+    await client.query(sql);
+    await client.query('COMMIT');
+
     console.log('Migration applied successfully');
   } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
     console.error('Migration failed:', err);
+    process.exit(1);
   } finally {
-    await pool.end();
+    client.release();
   }
 }
 
