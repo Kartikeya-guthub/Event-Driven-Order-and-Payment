@@ -6,16 +6,16 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- =========================
 CREATE TABLE IF NOT EXISTS orders (
   id UUID PRIMARY KEY,
-  user_id UUID NOT NULL,
+  user_id TEXT NOT NULL,
 
   amount NUMERIC(12,2) NOT NULL CHECK (amount > 0),
 
   state TEXT NOT NULL CHECK (
     state IN (
-      'created',
-      'payment_pending',
-      'paid',
-      'failed'
+      'CREATED',
+      'PAYMENT_PENDING',
+      'PAID',
+      'FAILED'
     )
   ),
 

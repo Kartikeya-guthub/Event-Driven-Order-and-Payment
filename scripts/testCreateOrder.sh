@@ -1,15 +1,18 @@
 #!/bin/bash
 
+# Exit on any error
 set -e
 
+# Configuration
 API_URL="http://localhost:3000"
 
+# Main action
 echo "Creating order..."
 
-curl --fail -i -X POST "$API_URL/orders" \
+curl -i -X POST "$API_URL/orders" \
   -H "Content-Type: application/json" \
   -d '{
-    "userId": "11111121-1211-1111-1111-112112112112",
+    "user_id": "11111111-1111-1111-1111-111111111111",
     "amount": 100
   }'
 

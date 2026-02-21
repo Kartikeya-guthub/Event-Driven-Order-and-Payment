@@ -4,15 +4,21 @@ const { createOrder } = require('../services/orderService');
 
 router.post('/', async (req, res) => {
     try {
-        const { userId, amount } = req.body;
+        const { user_id, amount } = req.body;
 
-        if (!userId || !amount) {
+        if (!user_id) {
             return res.status(400).json({
-                error: 'Missing required fields: userId and amount'
+                error: 'Missing required field: user_id'
             });
         }
 
-        const result = await createOrder({ userId, amount });
+        if (typeof amount !== 'number' || amount <= 0) {
+            return res.status(400).json({
+                error: 'Invalid field: amount must be a number greater than 0'
+            });
+        }
+
+        const result = await createOrder({ userId: user_id, amount });
 
         res.status(201).json({
             order_id: result.orderId,
