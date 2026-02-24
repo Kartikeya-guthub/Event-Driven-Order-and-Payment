@@ -1,5 +1,6 @@
 require('dotenv').config();
 const { Kafka } = require('kafkajs');
+const { processPayment } = require('./paymentService');
 
 const kafka = new Kafka({
   clientId: 'payment-worker',
@@ -43,6 +44,11 @@ async function handleMessage(topic, partition, message) {
       offset: message.offset,
       event,
     });
+
+    // 🔌 Connect Worker to Payment
+    if (event.event_type === 'OrderCreated') {
+      await processPayment(event);
+    }
 
   } catch (error) {
     console.error('[Worker] Error processing message:', {
