@@ -43,11 +43,13 @@ async function pollOutbox() {
     }));
 
     // Send batch to Kafka
+    console.log(`[Poller] Sending ${messages.length} messages to Kafka...`);
     await producer.send({
       topic: TOPIC,
       acks: -1,
       messages,
     });
+    console.log(`[Poller] Successfully sent batch to Kafka.`);
 
     // Mark events as published
     for (const row of result.rows) {

@@ -21,7 +21,7 @@ async function startConsumer() {
     fromBeginning: true,
   });
 
-  console.log('[Worker] Subscribed to order-events');
+  console.log('[Worker] Subscribed to order-events. Waiting for messages...');
 
   await consumer.run({
     eachMessage: async ({ topic, partition, message }) => {
@@ -46,13 +46,15 @@ async function handleMessage(topic, partition, message) {
       event,
     });
 
-    const db = await db.client();
+    console.log('[Worker] Connecting to DB...');
+    const dbClient = await client.client();
+    console.log('[Worker] DB connected.');
 
     try {
-      await db.query('BEGIN');
+      await dbClient.query('BEGIN');
 
       // Step 1: idempotency check
-      const res = await db.query(
+      const res = await dbClient.query(
         `
         INSERT INTO processed_events(event_id)
         VALUES ($1)
@@ -65,22 +67,24 @@ async function handleMessage(topic, partition, message) {
       // If no row inserted → duplicate
       if (res.rowCount === 0) {
         console.log('Duplicate event skipped:', event.event_id);
-        await db.query('COMMIT');
+        await dbClient.query('COMMIT');
         return;
       }
 
-      await db.query('COMMIT');
+      await dbClient.query('COMMIT');
+      console.log('[Worker] Event marked as processed:', event.event_id);
 
     } catch (err) {
-      await db.query('ROLLBACK');
+      await dbClient.query('ROLLBACK');
       console.error('Error inserting processed event:', err);
       return;
     } finally {
-      db.release();
+      dbClient.release();
     }
 
     // 🔌 Connect Worker to Payment
     if (event.event_type === 'OrderCreated') {
+      console.log('[Worker] Processing payment for event:', event.event_id);
       await processPayment(event);
     }
 
