@@ -33,18 +33,21 @@ async function processPayment(event){
     finally{
         client.release();
     }
+
     try{
       const response = await axios.post('http://localhost:4000/pay',{
         order_id: aggregate_id,
         amount: payload.amount,
       },{
         timeout: 3000,
-      })
+      });
+
       if(response.data.status === 'success'){
         await markPaid(aggregate_id);
       }else{
         await markFailed(aggregate_id);
       }
+
     }catch(err){
       console.error(`Payment processing error for order ${aggregate_id}:`, err.message);
       await markFailed(aggregate_id);
@@ -52,11 +55,15 @@ async function processPayment(event){
 }
 
 
+// ================= MERGED markPaid =================
 async function markPaid(orderId) {
   const client = await db.client();
+  const eventId = uuidv4();
 
   try {
-    const result = await client.query(
+    await client.query('BEGIN');
+
+    const res = await client.query(
       `
       UPDATE orders
       SET state = 'PAID',
@@ -68,20 +75,52 @@ async function markPaid(orderId) {
       [orderId]
     );
 
-    if (result.rowCount === 1) {
-      console.log('Order PAID:', orderId);
+    if (res.rowCount === 0) {
+      await client.query('ROLLBACK');
+      console.log('Skip PAID update, already processed');
+      return;
     }
 
+    const payload = {
+      order_id: orderId,
+    };
+
+    await client.query(
+      `
+      INSERT INTO outbox (
+        event_id,
+        aggregate_type,
+        aggregate_id,
+        event_type,
+        payload
+      )
+      VALUES ($1, 'ORDER', $2, 'OrderPaid', $3)
+      `,
+      [eventId, orderId, payload]
+    );
+
+    await client.query('COMMIT');
+
+    console.log('Order PAID:', orderId);
+
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
   } finally {
     client.release();
   }
 }
 
+
+// ================= MERGED markFailed =================
 async function markFailed(orderId) {
   const client = await db.client();
+  const eventId = uuidv4();
 
   try {
-    const result = await client.query(
+    await client.query('BEGIN');
+
+    const res = await client.query(
       `
       UPDATE orders
       SET state = 'FAILED',
@@ -93,13 +132,40 @@ async function markFailed(orderId) {
       [orderId]
     );
 
-    if (result.rowCount === 1) {
-      console.log('Order FAILED:', orderId);
+    if (res.rowCount === 0) {
+      await client.query('ROLLBACK');
+      console.log('Skip FAILED update, already processed');
+      return;
     }
 
+    const payload = {
+      order_id: orderId,
+    };
+
+    await client.query(
+      `
+      INSERT INTO outbox (
+        event_id,
+        aggregate_type,
+        aggregate_id,
+        event_type,
+        payload
+      )
+      VALUES ($1, 'ORDER', $2, 'OrderFailed', $3)
+      `,
+      [eventId, orderId, payload]
+    );
+
+    await client.query('COMMIT');
+
+    console.log('Order FAILED:', orderId);
+
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
   } finally {
     client.release();
   }
 }
 
-module.exports = { processPayment };
+module.exports = { processPayment, markPaid, markFailed };

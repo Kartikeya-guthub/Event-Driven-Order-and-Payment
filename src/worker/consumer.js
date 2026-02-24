@@ -1,6 +1,7 @@
 require('dotenv').config();
 const { Kafka } = require('kafkajs');
 const { processPayment } = require('./paymentService');
+const client = require('../db/connection');
 
 const kafka = new Kafka({
   clientId: 'payment-worker',
@@ -44,6 +45,39 @@ async function handleMessage(topic, partition, message) {
       offset: message.offset,
       event,
     });
+
+    const db = await db.client();
+
+    try {
+      await db.query('BEGIN');
+
+      // Step 1: idempotency check
+      const res = await db.query(
+        `
+        INSERT INTO processed_events(event_id)
+        VALUES ($1)
+        ON CONFLICT DO NOTHING
+        RETURNING event_id
+        `,
+        [event.event_id]
+      );
+
+      // If no row inserted → duplicate
+      if (res.rowCount === 0) {
+        console.log('Duplicate event skipped:', event.event_id);
+        await db.query('COMMIT');
+        return;
+      }
+
+      await db.query('COMMIT');
+
+    } catch (err) {
+      await db.query('ROLLBACK');
+      console.error('Error inserting processed event:', err);
+      return;
+    } finally {
+      db.release();
+    }
 
     // 🔌 Connect Worker to Payment
     if (event.event_type === 'OrderCreated') {
